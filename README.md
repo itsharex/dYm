@@ -1,67 +1,90 @@
 # dYm
 
-> 抖音视频下载与智能分析管理工具（Electron + TypeScript）
+**[English](README.md) | [中文](README_CN.md)**
+
+> AI-Powered Video Analysis & Download Manager for Douyin (Electron + TypeScript)
 
 [![Electron](https://img.shields.io/badge/Electron-39.x-47848F?logo=electron&logoColor=white)](https://www.electronjs.org/)
 [![React](https://img.shields.io/badge/React-19.x-61DAFB?logo=react&logoColor=white)](https://reactjs.org/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.x-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 [![License](https://img.shields.io/badge/License-GPL%20v3-blue.svg)](LICENSE)
 
-dYm 是一个面向内容创作者/运营同学的桌面工具：
-- 无水印下载抖音视频
-- 批量管理作者与视频素材
-- 使用 AI 自动分析视频内容（标签/分类/摘要）
+dYm is a desktop application that combines **watermark-free video downloading** with **AI-driven content analysis**. Built for content creators, social media managers, and researchers who need to efficiently collect, organize, and understand short-form video content at scale.
 
-🔗 仓库地址：<https://github.com/Everless321/dYm>
+[Repository](https://github.com/Everless321/dYm)
 
 ---
 
-## ✨ 核心特性
+## AI Video Analysis
 
-- **用户管理**：添加、管理抖音用户，支持批量刷新
-- **批量下载**：并发控制、下载数量限制、任务可追踪
-- **智能分析**：集成 AI（Grok Vision API）做视频内容理解
-- **内容筛选**：按作者、标签、内容分级多维筛选
-- **本地存储**：SQLite 本地数据库，数据可控
-- **剪贴板检测**：自动识别抖音链接，一键添加
-- **托盘运行**：支持最小化到系统托盘后台运行
+The core intelligence of dYm — automatically understand what's in your videos without watching them one by one.
 
----
+### How It Works
 
-## 🚀 快速开始（30 秒）
+1. **Frame Extraction** — FFmpeg extracts key frames from videos at configurable intervals (e.g., 4 evenly-spaced frames from a 30s video)
+2. **Vision API Analysis** — Extracted frames are sent to a multimodal Vision LLM (OpenAI-compatible API) for content understanding
+3. **Structured Output** — The AI returns structured metadata that gets stored alongside each video in the local database
 
-1. 从 [Releases](https://github.com/Everless321/dYm/releases) 下载适合系统的安装包
-2. 打开 dYm，进入设置配置抖音 Cookie
-3. 粘贴抖音链接或添加用户
-4. 一键下载并按需开启 AI 分析
+### What the AI Extracts
 
----
+| Field | Description | Example |
+|-------|-------------|---------|
+| **Tags** | Content keywords for search & filtering | `["cooking", "recipe", "pasta"]` |
+| **Category** | Content classification | `Food & Cooking` |
+| **Summary** | Brief description of the video content | `Step-by-step pasta carbonara recipe with tips` |
+| **Scene** | Visual scene description | `Kitchen, indoor, close-up shots` |
+| **Content Level** | Content rating (1-5 scale) | `1` (safe for all audiences) |
 
-## 🖼 截图预览
+### Analysis Configuration
 
-> 建议在这里放 3 张图（主界面 / 下载任务 / AI 分析结果）
+- **Model Selection** — Works with any OpenAI-compatible Vision API (Grok, OpenAI GPT-4o, Claude, etc.)
+- **Custom Prompts** — Define exactly what the AI should look for in your content
+- **Frame Slicing** — Configure how many frames to extract per video (trade-off between accuracy and API cost)
+- **Concurrency Control** — Run multiple analyses in parallel with configurable worker count
+- **Rate Limiting** — Built-in RPM (requests per minute) limiter to stay within API quotas
+- **Batch Processing** — Analyze all unprocessed videos in one click, with real-time progress tracking
+- **Per-User Analysis** — Analyze videos from a specific creator, or across all creators at once
 
-<!--
-![主界面](docs/screenshots/main.png)
-![下载任务](docs/screenshots/downloads.png)
-![AI 分析](docs/screenshots/analysis.png)
--->
+### Image Post Support
 
----
-
-## 🛠 技术栈
-
-- **框架**：Electron + React 19 + TypeScript
-- **UI**：Tailwind CSS + Radix UI + shadcn/ui
-- **数据库**：better-sqlite3
-- **视频处理**：fluent-ffmpeg
-- **下载核心**：[dy-downloader](https://github.com/Everless321/dyDownload)
+For image carousel posts (Douyin's photo mode), dYm sends the original images directly to the Vision API — no frame extraction needed. Up to 10 images per post are analyzed in a single API call.
 
 ---
 
-## 📦 安装与开发
+## Features
 
-### 从源码运行
+- **User Management** — Add and manage Douyin creators, bulk refresh profiles
+- **Batch Download** — Concurrent watermark-free downloads with configurable limits and task tracking
+- **Smart Filtering** — Filter content by creator, AI-generated tags, category, and content level
+- **Local Storage** — All data stored in a local SQLite database, fully under your control
+- **Clipboard Detection** — Auto-detect Douyin links from clipboard, one-click add
+- **System Tray** — Minimize to tray for background operation
+
+---
+
+## Quick Start
+
+1. Download the installer from [Releases](https://github.com/Everless321/dYm/releases)
+2. Open dYm and configure your Douyin Cookie in Settings
+3. Paste a Douyin link or add a creator
+4. Download videos and enable AI analysis as needed
+
+---
+
+## Tech Stack
+
+- **Framework**: Electron + React 19 + TypeScript
+- **UI**: Tailwind CSS + Radix UI + shadcn/ui
+- **Database**: better-sqlite3
+- **Video Processing**: fluent-ffmpeg (frame extraction for AI analysis)
+- **Download Engine**: [dy-downloader](https://github.com/Everless321/dyDownload)
+- **AI Integration**: OpenAI-compatible Vision API (configurable endpoint)
+
+---
+
+## Installation & Development
+
+### Run from Source
 
 ```bash
 git clone https://github.com/Everless321/dYm.git
@@ -70,108 +93,99 @@ npm install
 npm run dev
 ```
 
-### 下载预编译版本
+### Download Pre-built
 
-前往 [Releases](https://github.com/Everless321/dYm/releases) 下载安装包。
+Go to [Releases](https://github.com/Everless321/dYm/releases) for installer packages.
 
 ---
 
-## 🏗 打包构建
-
-### macOS
+## Build
 
 ```bash
+# macOS
 npm run build:mac
-```
 
-### Windows
-
-```bash
+# Windows
 npm run build:win
-```
 
-### Linux
-
-```bash
+# Linux
 npm run build:linux
-```
 
-### 仅编译不打包
-
-```bash
+# Compile only (no packaging)
 npm run build:unpack
 ```
 
-> 产物位于 `dist/` 目录（具体文件名以当前构建配置为准）。
+Build output is in the `dist/` directory.
 
 ---
 
-## ⚙️ 配置说明
+## Configuration
 
-### 1) Cookie 设置（首次必做）
+### Cookie Setup (Required)
 
-1. 进入设置页面
-2. 点击「获取 Cookie」
-3. 在弹窗中登录抖音
-4. 登录成功后自动保存
+1. Go to Settings
+2. Click "Get Cookie"
+3. Log in to Douyin in the popup window
+4. Cookie is saved automatically after login
 
-### 2) AI 分析设置（可选）
+### AI Analysis Setup (Optional)
 
-1. 进入设置 → 分析设置
-2. 配置 Grok API Key 和 API URL
-3. 可自定义分析提示词与参数
+1. Go to Settings → Analysis Settings
+2. Configure your API Key and API URL (default: Grok API)
+3. Customize the analysis prompt, model, concurrency, and rate limits
 
 ---
 
-## 📁 项目结构
+## Project Structure
 
 ```text
 dYm/
 ├── src/
-│   ├── main/                # Electron 主进程
-│   │   ├── database/        # SQLite 数据库操作
-│   │   ├── services/        # 下载、分析、调度等服务
+│   ├── main/                # Electron main process
+│   │   ├── database/        # SQLite database operations
+│   │   ├── services/        # Download, analysis, scheduling services
+│   │   │   └── analyzer.ts  # AI video analysis engine
 │   │   └── index.ts
-│   ├── preload/             # 预加载脚本
-│   └── renderer/            # React 渲染进程
-├── build/                   # 构建资源
-├── resources/               # 应用资源
-└── electron-builder.yml     # 打包配置
+│   ├── preload/             # Preload scripts
+│   └── renderer/            # React renderer process
+├── build/                   # Build resources
+├── resources/               # App resources
+└── electron-builder.yml     # Packaging config
 ```
 
 ---
 
-## 🧪 常用命令
+## Commands
 
 ```bash
-npm run dev           # 开发模式
-npm run typecheck     # 类型检查
-npm run lint          # 代码检查
-npm run format        # 格式化
-npm run test:e2e      # E2E 测试
+npm run dev           # Development mode
+npm run typecheck     # Type checking
+npm run lint          # Linting
+npm run format        # Formatting
+npm run test:e2e      # E2E tests
 ```
 
 ---
 
-## ❓常见问题
+## FAQ
 
-### Q1: 下载失败怎么办？
+### Download fails?
 
-请检查：
-1. Cookie 是否正确且未过期
-2. 网络连接是否正常
-3. 下载目录是否有写权限
+Check:
+1. Cookie is valid and not expired
+2. Network connection is stable
+3. Download directory has write permissions
 
-### Q2: AI 分析失败怎么办？
+### AI analysis fails?
 
-请确认：
-1. Grok API Key 配置正确
-2. API 配额充足
-3. 视频文件完整可读
+Check:
+1. API Key is configured correctly
+2. API quota is sufficient
+3. Video files are complete and readable
 
-### Q3: macOS 提示“应用已损坏/无法打开”怎么办？
+### macOS says "app is damaged"?
 
-若遇到签名校验问题，可执行：
+Run:
 
 ```bash
 sudo xattr -cr /Applications/dYm.app/
@@ -179,10 +193,10 @@ sudo xattr -cr /Applications/dYm.app/
 
 ---
 
-## 📄 许可证
+## License
 
-本项目采用 [GPL v3](https://www.gnu.org/licenses/gpl-3.0.html) 协议。
+This project is licensed under [GPL v3](https://www.gnu.org/licenses/gpl-3.0.html).
 
-## ⚠️ 免责声明
+## Disclaimer
 
-本工具仅供学习与研究，请遵守当地法律法规及平台服务条款。下载内容版权归原作者所有。
+This tool is for learning and research purposes only. Please comply with local laws and platform terms of service. All downloaded content copyrights belong to the original creators.
