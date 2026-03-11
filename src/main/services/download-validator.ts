@@ -1,4 +1,4 @@
-import { existsSync, readdirSync, statSync, unlinkSync, rmSync } from 'fs'
+import { existsSync, readdirSync, statSync, unlinkSync } from 'fs'
 import { join } from 'path'
 
 export function validateDownloadFolder(folderPath: string, awemeType: number): boolean {
@@ -17,13 +17,15 @@ export function validateDownloadFolder(folderPath: string, awemeType: number): b
 
   // Video types must have at least one .mp4 file
   if ([0, 4, 55, 61, 109, 201].includes(awemeType)) {
-    const hasVideo = files.some(f => f.endsWith('.mp4'))
+    const hasVideo = files.some((f) => f.endsWith('.mp4'))
     if (!hasVideo) return false
   }
 
   // Image type (68) must have at least one image file
   if (awemeType === 68) {
-    const hasImage = files.some(f => f.endsWith('.webp') || f.endsWith('.jpg') || f.endsWith('.jpeg') || f.endsWith('.png'))
+    const hasImage = files.some(
+      (f) => f.endsWith('.webp') || f.endsWith('.jpg') || f.endsWith('.jpeg') || f.endsWith('.png')
+    )
     if (!hasImage) return false
   }
 
@@ -47,9 +49,13 @@ export function cleanupFailedDownload(folderPath: string): void {
       try {
         const stat = statSync(filePath)
         if (stat.size === 0) unlinkSync(filePath)
-      } catch { /* ignore */ }
+      } catch {
+        /* ignore */
+      }
     }
-  } catch { /* ignore */ }
+  } catch {
+    /* ignore */
+  }
 }
 
 export interface BrokenPostInfo {
@@ -98,7 +104,7 @@ export function checkPostFileIntegrity(
 
   // Video types need .mp4
   if ([0, 4, 55, 61, 109, 201].includes(awemeType)) {
-    const hasVideo = files.some(f => f.endsWith('.mp4'))
+    const hasVideo = files.some((f) => f.endsWith('.mp4'))
     if (!hasVideo) {
       return { valid: false, reason: '缺少视频文件 (.mp4)' }
     }
@@ -106,8 +112,8 @@ export function checkPostFileIntegrity(
 
   // Image type needs image files
   if (awemeType === 68) {
-    const hasImage = files.some(f =>
-      f.endsWith('.webp') || f.endsWith('.jpg') || f.endsWith('.jpeg') || f.endsWith('.png')
+    const hasImage = files.some(
+      (f) => f.endsWith('.webp') || f.endsWith('.jpg') || f.endsWith('.jpeg') || f.endsWith('.png')
     )
     if (!hasImage) {
       return { valid: false, reason: '缺少图片文件' }
