@@ -6,53 +6,33 @@
       name="viewport"
       content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no"
     />
-    <meta name="theme-color" content="#050505" />
-    <title>dYm Web Feed</title>
+    <meta name="theme-color" content="#000000" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <title>dYm Feed</title>
     <link rel="stylesheet" href="/app.css" />
   </head>
   <body>
-    <div class="app-shell">
-      <header class="app-header">
-        <div>
-          <p class="eyebrow">DYM WEB FEED</p>
-          <h1>局域网视频流</h1>
-        </div>
-        <button id="filtersToggle" class="ghost-button" type="button">筛选</button>
-      </header>
+    <!-- ── Browse View (grid) ── -->
+    <div id="browseView" class="view browse-view">
+      <nav class="nav-bar">
+        <span class="nav-title">Feed</span>
+      </nav>
+      <div id="authorBar" class="author-bar">
+        <div id="authorScroll" class="author-scroll"></div>
+      </div>
+      <div id="grid" class="grid"></div>
+      <div id="gridLoading" class="grid-loading" style="display:none">
+        <div class="spinner"></div>
+      </div>
+    </div>
 
-      <section id="filtersPanel" class="filters-panel is-open">
-        <div class="filters-row">
-          <label class="search-shell" for="keywordInput">
-            <span>搜索</span>
-            <input id="keywordInput" type="search" placeholder="作者、文案、描述" />
-          </label>
-          <label class="switch-shell" for="analyzedOnly">
-            <input id="analyzedOnly" type="checkbox" />
-            <span>仅看已分析</span>
-          </label>
-        </div>
-        <div class="filter-block">
-          <div class="filter-head">
-            <span>作者</span>
-            <button id="resetFilters" class="text-button" type="button">重置</button>
-          </div>
-          <div id="authorChips" class="chip-row"></div>
-        </div>
-        <div class="filter-block">
-          <div class="filter-head">
-            <span>标签</span>
-            <span id="tagHint" class="filter-hint">支持多选</span>
-          </div>
-          <div id="tagChips" class="chip-row"></div>
-        </div>
-      </section>
-
-      <section class="status-bar">
-        <div id="serverMeta" class="status-pill">正在连接服务...</div>
-        <div id="feedMeta" class="status-pill subtle">等待加载</div>
-      </section>
-
-      <main id="feed" class="feed" aria-live="polite"></main>
+    <!-- ── Player View (fullscreen swipe) ── -->
+    <div id="playerView" class="view player-view" style="display:none">
+      <button id="playerBack" class="player-back" type="button" aria-label="返回">
+        <svg viewBox="0 0 24 24" width="22" height="22"><path fill="currentColor" d="m14.7 6.3-1.4-1.4L6.2 12l7.1 7.1 1.4-1.4L9 12l5.7-5.7Z"/></svg>
+      </button>
+      <div id="playerFeed" class="player-feed"></div>
     </div>
 
     <div id="toast" class="toast" role="status" aria-live="polite"></div>

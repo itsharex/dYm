@@ -1,6 +1,6 @@
 {
   "name": "dym",
-  "version": "1.5.0",
+  "version": "1.6.0",
   "description": "An Electron application with React and TypeScript",
   "license": "GPL-3.0",
   "main": "./out/main/index.js",
@@ -46,7 +46,7 @@
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "cmdk": "^1.1.1",
-    "dy-downloader": "github:Everless321/dyDownload",
+    "dy-downloader": "^0.2.3",
     "electron-updater": "^6.3.9",
     "fluent-ffmpeg": "^2.1.3",
     "lucide-react": "^0.563.0",

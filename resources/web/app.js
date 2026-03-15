@@ -1,357 +1,295 @@
 const state = {
-  info: null,
   tags: [],
   authors: [],
   posts: [],
   page: 1,
-  pageSize: 8,
+  pageSize: 18,
   total: 0,
   hasMore: true,
   loading: false,
   globalMuted: true,
   activePostId: null,
+  playerPosts: [],
+  playerStartIndex: 0,
   filters: {
     secUid: '',
-    tags: [],
     keyword: '',
     analyzedOnly: false
   }
 }
 
-const elements = {
-  feed: document.getElementById('feed'),
-  serverMeta: document.getElementById('serverMeta'),
-  feedMeta: document.getElementById('feedMeta'),
-  filtersPanel: document.getElementById('filtersPanel'),
-  filtersToggle: document.getElementById('filtersToggle'),
-  keywordInput: document.getElementById('keywordInput'),
-  analyzedOnly: document.getElementById('analyzedOnly'),
-  authorChips: document.getElementById('authorChips'),
-  tagChips: document.getElementById('tagChips'),
-  resetFilters: document.getElementById('resetFilters'),
+const el = {
+  browseView: document.getElementById('browseView'),
+  playerView: document.getElementById('playerView'),
+  playerBack: document.getElementById('playerBack'),
+  playerFeed: document.getElementById('playerFeed'),
+  authorScroll: document.getElementById('authorScroll'),
+  grid: document.getElementById('grid'),
+  gridLoading: document.getElementById('gridLoading'),
   toast: document.getElementById('toast')
 }
 
 let storyObserver = null
-let searchTimer = null
 let toastTimer = null
 
 const icons = {
   muted:
-    '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M5 9v6h4l5 4V5L9 9H5Zm11.59 3 2.7 2.7-1.42 1.42-2.7-2.7-2.7 2.7-1.42-1.42 2.7-2.7-2.7-2.7 1.42-1.42 2.7 2.7 2.7-2.7 1.42 1.42-2.7 2.7Z"/></svg>',
+    '<svg viewBox="0 0 24 24"><path fill="currentColor" d="M5 9v6h4l5 4V5L9 9H5Zm11.59 3 2.7 2.7-1.42 1.42-2.7-2.7-2.7 2.7-1.42-1.42 2.7-2.7-2.7-2.7 1.42-1.42 2.7 2.7 2.7-2.7 1.42 1.42-2.7 2.7Z"/></svg>',
   volume:
-    '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M5 9v6h4l5 4V5L9 9H5Zm11.5 3a4.5 4.5 0 0 0-2.14-3.83v7.66A4.5 4.5 0 0 0 16.5 12Zm-2.14-8.24v2.06a8 8 0 0 1 0 12.36v2.06c3.45-1.35 5.89-4.71 5.89-8.24s-2.44-6.89-5.89-8.24Z"/></svg>',
+    '<svg viewBox="0 0 24 24"><path fill="currentColor" d="M5 9v6h4l5 4V5L9 9H5Zm11.5 3a4.5 4.5 0 0 0-2.14-3.83v7.66A4.5 4.5 0 0 0 16.5 12Zm-2.14-8.24v2.06a8 8 0 0 1 0 12.36v2.06c3.45-1.35 5.89-4.71 5.89-8.24s-2.44-6.89-5.89-8.24Z"/></svg>',
   chevronLeft:
-    '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="m14.7 6.3-1.4-1.4L6.2 12l7.1 7.1 1.4-1.4L9 12l5.7-5.7Z"/></svg>',
+    '<svg viewBox="0 0 24 24"><path fill="currentColor" d="m14.7 6.3-1.4-1.4L6.2 12l7.1 7.1 1.4-1.4L9 12l5.7-5.7Z"/></svg>',
   chevronRight:
-    '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="m9.3 17.7 1.4 1.4 7.1-7.1-7.1-7.1-1.4 1.4L15 12l-5.7 5.7Z"/></svg>'
+    '<svg viewBox="0 0 24 24"><path fill="currentColor" d="m9.3 17.7 1.4 1.4 7.1-7.1-7.1-7.1-1.4 1.4L15 12l-5.7 5.7Z"/></svg>',
+  play: '<svg viewBox="0 0 24 24"><path fill="currentColor" d="M8 5v14l11-7z"/></svg>'
 }
 
-function escapeHtml(value) {
+function esc(value) {
   return String(value ?? '')
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;')
 }
 
-function truncate(value, maxLength = 72) {
-  const text = String(value ?? '').trim()
-  if (!text) return ''
-  return text.length > maxLength ? `${text.slice(0, maxLength)}...` : text
-}
-
-function headlineFor(post) {
-  const candidates = [
-    post.analysis?.summary,
-    post.caption,
-    post.desc,
-    post.author?.nickname
-  ].filter(Boolean)
-
-  return truncate(candidates[0] || '未命名片段', 22)
+function truncate(value, max = 60) {
+  const t = String(value ?? '').trim()
+  return !t ? '' : t.length > max ? t.slice(0, max) + '...' : t
 }
 
 function formatDate(value) {
-  if (!value) return '未记录时间'
-  if (/^\d{8}/.test(value)) {
-    return `${value.slice(0, 4)}-${value.slice(4, 6)}-${value.slice(6, 8)}`
-  }
+  if (!value) return ''
+  if (/^\d{8}/.test(value)) return `${value.slice(0, 4)}-${value.slice(4, 6)}-${value.slice(6, 8)}`
   return value.slice(0, 10)
 }
 
-function showToast(message) {
-  elements.toast.textContent = message
-  elements.toast.classList.add('is-visible')
-  window.clearTimeout(toastTimer)
-  toastTimer = window.setTimeout(() => {
-    elements.toast.classList.remove('is-visible')
-  }, 2200)
+function showToast(msg) {
+  el.toast.textContent = msg
+  el.toast.classList.add('is-visible')
+  clearTimeout(toastTimer)
+  toastTimer = setTimeout(() => el.toast.classList.remove('is-visible'), 2200)
 }
 
 async function fetchJson(path) {
-  const response = await fetch(path, { cache: 'no-store' })
-  if (!response.ok) {
-    const payload = await response.json().catch(() => ({}))
-    throw new Error(payload.error || `Request failed: ${response.status}`)
+  const res = await fetch(path, { cache: 'no-store' })
+  if (!res.ok) {
+    const p = await res.json().catch(() => ({}))
+    throw new Error(p.error || `${res.status}`)
   }
-  return response.json()
+  return res.json()
 }
 
-function setStatus() {
-  const lanUrl =
-    state.info?.urls?.find((url) => !url.includes('127.0.0.1') && !url.includes('localhost')) ||
-    state.info?.origin
+// ── Author Bar ──
 
-  elements.serverMeta.textContent = lanUrl
-    ? `在线端口 ${state.info.port} · ${lanUrl}`
-    : '服务未启动'
-  elements.feedMeta.textContent = state.loading
-    ? '加载中...'
-    : `已加载 ${state.posts.length} / ${state.total} 条`
-}
-
-function renderAuthorChips() {
-  const items = [{ sec_uid: '', nickname: '全部作者' }, ...state.authors]
-  elements.authorChips.innerHTML = items
+function renderAuthors() {
+  const items = [{ sec_uid: '', nickname: '全部' }, ...state.authors]
+  el.authorScroll.innerHTML = items
     .map(
-      (author) => `
-        <button
-          class="chip ${state.filters.secUid === author.sec_uid ? 'is-active' : ''}"
-          type="button"
-          data-author="${escapeHtml(author.sec_uid)}"
-        >
-          ${escapeHtml(author.nickname)}
-        </button>
-      `
+      (a) =>
+        `<button class="author-tab ${state.filters.secUid === a.sec_uid ? 'is-active' : ''}" data-uid="${esc(a.sec_uid)}">${esc(a.nickname)}</button>`
     )
     .join('')
 
-  elements.authorChips.querySelectorAll('[data-author]').forEach((button) => {
-    button.addEventListener('click', () => {
-      state.filters.secUid = button.dataset.author || ''
-      loadFeed(true)
+  el.authorScroll.querySelectorAll('.author-tab').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      state.filters.secUid = btn.dataset.uid || ''
+      loadGrid(true)
     })
   })
 }
 
-function renderTagChips() {
-  const items = ['全部标签', ...state.tags]
-  elements.tagChips.innerHTML = items
-    .map((tag) => {
-      const active =
-        tag === '全部标签'
-          ? state.filters.tags.length === 0
-          : state.filters.tags.includes(tag)
-      return `
-        <button
-          class="chip ${active ? 'is-active' : ''}"
-          type="button"
-          data-tag="${escapeHtml(tag)}"
-        >
-          ${escapeHtml(tag)}
-        </button>
-      `
-    })
-    .join('')
+// ── Grid View ──
 
-  elements.tagChips.querySelectorAll('[data-tag]').forEach((button) => {
-    button.addEventListener('click', () => {
-      const tag = button.dataset.tag || ''
-      if (tag === '全部标签') {
-        state.filters.tags = []
-      } else if (state.filters.tags.includes(tag)) {
-        state.filters.tags = state.filters.tags.filter((item) => item !== tag)
-      } else {
-        state.filters.tags = [...state.filters.tags, tag]
+function coverUrl(post) {
+  return post.coverUrl || post.media?.imageUrls?.[0] || ''
+}
+
+function gridItemHtml(post) {
+  const cover = coverUrl(post)
+  const desc = truncate(post.desc || post.caption || post.analysis?.summary || '', 20)
+  const badge = post.isImagePost ? `${post.media?.imageUrls?.length || 0} 图` : ''
+
+  return `
+    <div class="grid-item" data-post-id="${post.id}">
+      ${cover ? `<img class="grid-cover" src="${esc(cover)}" />` : ''}
+      ${badge ? `<span class="grid-badge">${esc(badge)}</span>` : ''}
+      <div class="grid-info">
+        <div class="grid-author">@${esc(post.author?.nickname || '')}</div>
+        ${desc ? `<div class="grid-desc">${esc(desc)}</div>` : ''}
+      </div>
+    </div>
+  `
+}
+
+function bindGridItems() {
+  el.grid.querySelectorAll('.grid-item').forEach((item) => {
+    item.addEventListener('click', () => {
+      const postId = Number(item.dataset.postId)
+      const index = state.posts.findIndex((p) => p.id === postId)
+      if (index >= 0) openPlayer(index)
+    })
+  })
+}
+
+async function loadGrid(reset = false) {
+  if (state.loading) return
+
+  if (reset) {
+    state.page = 1
+    state.posts = []
+    state.hasMore = true
+    el.grid.innerHTML = ''
+  } else if (!state.hasMore) {
+    return
+  }
+
+  state.loading = true
+  el.gridLoading.style.display = 'flex'
+
+  const query = new URLSearchParams({
+    page: String(state.page),
+    pageSize: String(state.pageSize)
+  })
+  if (state.filters.secUid) query.set('secUid', state.filters.secUid)
+  if (state.filters.keyword) query.set('keyword', state.filters.keyword)
+  if (state.filters.analyzedOnly) query.set('analyzedOnly', 'true')
+
+  try {
+    const payload = await fetchJson(`/api/feed?${query}`)
+    state.authors = payload.authors || []
+    state.total = payload.total || 0
+    state.hasMore = Boolean(payload.hasMore)
+
+    const incoming = Array.isArray(payload.posts) ? payload.posts : []
+    if (reset) {
+      state.posts = incoming
+    } else {
+      const ids = new Set(state.posts.map((p) => p.id))
+      for (const p of incoming) {
+        if (!ids.has(p.id)) state.posts.push(p)
       }
-      loadFeed(true)
-    })
-  })
+    }
+
+    renderAuthors()
+
+    if (state.posts.length === 0 && reset) {
+      el.grid.innerHTML = `
+        <div class="grid-empty">
+          <h2>暂无内容</h2>
+          <p>在桌面端下载视频后即可在此浏览</p>
+        </div>`
+    } else {
+      const fragment = document.createElement('div')
+      fragment.innerHTML = incoming.map(gridItemHtml).join('')
+      while (fragment.firstElementChild) el.grid.appendChild(fragment.firstElementChild)
+      bindGridItems()
+    }
+
+    if (incoming.length > 0) state.page += 1
+  } catch (err) {
+    if (reset) {
+      el.grid.innerHTML = `
+        <div class="grid-empty">
+          <h2>加载失败</h2>
+          <p>${esc(err.message)}</p>
+        </div>`
+    }
+    showToast(err.message || '加载失败')
+  } finally {
+    state.loading = false
+    el.gridLoading.style.display = 'none'
+  }
 }
 
-function storyMarkup(post, index) {
-  const cover =
-    post.coverUrl ||
-    post.media?.imageUrls?.[0] ||
-    post.media?.videoUrl ||
-    ''
-  const safeCover = escapeHtml(cover)
-  const tags = (post.analysis?.tags || []).slice(0, 4)
-  const summary = headlineFor(post)
-  const desc = truncate(post.desc || post.caption || post.analysis?.summary || '', 84)
-  const contentLevel =
-    post.analysis?.contentLevel === null || post.analysis?.contentLevel === undefined
-      ? '未评级'
-      : `L${post.analysis.contentLevel}`
+// Grid infinite scroll
+el.grid.addEventListener('scroll', () => {
+  const remaining = el.grid.scrollHeight - el.grid.scrollTop - el.grid.clientHeight
+  if (remaining < window.innerHeight && state.hasMore && !state.loading) {
+    loadGrid(false)
+  }
+})
+
+// ── Player View ──
+
+function storyHtml(post, index, total) {
+  const cover = coverUrl(post)
+  const safeCover = esc(cover)
+  const tags = (post.analysis?.tags || []).slice(0, 3)
+  const desc = truncate(post.desc || post.caption || post.analysis?.summary || '', 80)
+  const date = formatDate(post.createTime)
 
   const mediaHtml =
     post.media?.type === 'video' && post.media.videoUrl
-      ? `
-          <video
-            class="story-media js-story-video"
-            src="${escapeHtml(post.media.videoUrl)}"
-            poster="${safeCover}"
-            preload="metadata"
-            playsinline
-            loop
-            muted
-          ></video>
-        `
-      : `
-          <div class="story-image-stack">
-            ${(post.media?.imageUrls || [])
-              .map(
-                (url, imageIndex) => `
-                  <img
-                    class="story-image ${imageIndex === 0 ? 'is-visible' : ''}"
-                    src="${escapeHtml(url)}"
-                    alt="${escapeHtml(summary)}"
-                    loading="lazy"
-                    data-image-index="${imageIndex}"
-                  />
-                `
-              )
-              .join('')}
-          </div>
-          ${
-            post.media?.musicUrl
-              ? `<audio class="js-story-audio" src="${escapeHtml(post.media.musicUrl)}" loop></audio>`
-              : ''
-          }
-        `
+      ? `<video
+        class="story-media js-story-video"
+        src="${esc(post.media.videoUrl)}"
+        poster="${safeCover}"
+        preload="metadata"
+        playsinline loop muted
+      ></video>`
+      : `<div class="story-image-stack">
+        ${(post.media?.imageUrls || [])
+          .map(
+            (url, i) =>
+              `<img class="story-image ${i === 0 ? 'is-visible' : ''}" src="${esc(url)}" alt="" loading="lazy" data-image-index="${i}" />`
+          )
+          .join('')}
+      </div>
+      ${post.media?.musicUrl ? `<audio class="js-story-audio" src="${esc(post.media.musicUrl)}" loop></audio>` : ''}`
 
+  const imageCount = post.media?.imageUrls?.length || 0
   const galleryNav =
-    post.media?.type === 'images' && (post.media.imageUrls?.length || 0) > 1
-      ? `
-          <div class="story-gallery-nav">
-            <button class="gallery-button" type="button" data-gallery-action="prev">${icons.chevronLeft}</button>
-            <button class="gallery-button" type="button" data-gallery-action="next">${icons.chevronRight}</button>
-          </div>
-          <div class="story-dots">
-            ${post.media.imageUrls
-              .map(
-                (_url, imageIndex) => `
-                  <span class="story-dot ${imageIndex === 0 ? 'is-active' : ''}" data-dot-index="${imageIndex}"></span>
-                `
-              )
-              .join('')}
-          </div>
-        `
+    post.media?.type === 'images' && imageCount > 1
+      ? `<div class="story-gallery-nav">
+        <button class="gallery-button" type="button" data-gallery-action="prev">${icons.chevronLeft}</button>
+        <button class="gallery-button" type="button" data-gallery-action="next">${icons.chevronRight}</button>
+      </div>
+      <div class="story-dots">
+        ${post.media.imageUrls
+          .map(
+            (_, i) =>
+              `<span class="story-dot ${i === 0 ? 'is-active' : ''}" data-dot-index="${i}"></span>`
+          )
+          .join('')}
+      </div>`
       : ''
 
   return `
-    <article
-      class="story"
-      data-post-id="${post.id}"
-      data-index="${index}"
-      data-type="${escapeHtml(post.media?.type || 'unknown')}"
-      data-image-count="${post.media?.imageUrls?.length || 0}"
-      data-image-index="0"
-      style="--story-background: url('${safeCover}') center / cover no-repeat;"
-    >
-      <div class="story-shell">
-        <div class="story-phone">
-          <div class="story-media-layer">${mediaHtml}</div>
-          <div class="story-overlay"></div>
-          <div class="story-topline">
-            <span class="story-badge">${post.isImagePost ? 'IMAGE STORY' : 'VIDEO STORY'}</span>
-            <span class="story-index">${String(index + 1).padStart(2, '0')} / ${Math.max(state.total, state.posts.length)}</span>
-          </div>
-          ${galleryNav}
-          <div class="story-copy">
-            <div class="story-author">@${escapeHtml(post.author?.nickname || '未知作者')}</div>
-            <p class="story-summary">${escapeHtml(summary)}</p>
-            <p class="story-desc">${escapeHtml(desc || '暂无描述')}</p>
-            <div class="story-meta">
-              <span class="story-stat">${escapeHtml(contentLevel)}</span>
-              <span class="story-stat">${escapeHtml(formatDate(post.createTime))}</span>
-              ${tags.map((tag) => `<span class="story-chip">#${escapeHtml(tag)}</span>`).join('')}
-            </div>
-          </div>
-          <aside class="story-rail">
-            <button class="rail-button" type="button" data-action="mute" aria-label="切换静音">
-              ${state.globalMuted ? icons.muted : icons.volume}
-            </button>
-            <div class="rail-caption">${post.isImagePost ? '图集' : '视频'}<br />${escapeHtml(contentLevel)}</div>
-          </aside>
+    <article class="story" data-post-id="${post.id}" data-index="${index}"
+      data-type="${esc(post.media?.type || 'unknown')}"
+      data-image-count="${imageCount}" data-image-index="0">
+      <div class="story-bg" style="background-image:url('${safeCover}')"></div>
+      <div class="story-media-layer">${mediaHtml}</div>
+      <div class="story-overlay"></div>
+      <span class="story-counter">${index + 1} / ${total}</span>
+      ${galleryNav}
+      <div class="story-copy">
+        <div class="story-author">@${esc(post.author?.nickname || '未知')}</div>
+        ${desc ? `<p class="story-title">${esc(desc)}</p>` : ''}
+        <div class="story-tags">
+          ${date ? `<span class="story-tag">${esc(date)}</span>` : ''}
+          ${tags.map((t) => `<span class="story-tag">#${esc(t)}</span>`).join('')}
         </div>
       </div>
-    </article>
-  `
+      <aside class="story-rail">
+        <button class="rail-button" type="button" data-action="mute" aria-label="静音">
+          ${state.globalMuted ? icons.muted : icons.volume}
+        </button>
+      </aside>
+    </article>`
 }
 
-function renderPlaceholder(title, message, buttonText = '重试') {
-  elements.feed.innerHTML = `
-    <section class="placeholder">
-      <div class="placeholder-card">
-        <h2>${escapeHtml(title)}</h2>
-        <p>${escapeHtml(message)}</p>
-        <button id="retryButton" class="ghost-button" type="button">${escapeHtml(buttonText)}</button>
-      </div>
-    </section>
-  `
-  document.getElementById('retryButton')?.addEventListener('click', () => loadFeed(true))
-}
-
-function renderLoadingState() {
-  elements.feed.innerHTML = `
-    <section class="loading-card">
-      <div>
-        <div class="spinner"></div>
-        <div class="status-pill">正在加载视频流...</div>
-      </div>
-    </section>
-  `
-}
-
-function syncMuteButtons() {
-  elements.feed.querySelectorAll('[data-action="mute"]').forEach((button) => {
-    button.innerHTML = state.globalMuted ? icons.muted : icons.volume
-  })
-}
-
-function updateImageStory(story, nextIndex) {
-  const imageCount = Number.parseInt(story.dataset.imageCount || '0', 10)
-  if (imageCount <= 1) return
-
-  let targetIndex = nextIndex
-  if (targetIndex < 0) targetIndex = imageCount - 1
-  if (targetIndex >= imageCount) targetIndex = 0
-
-  story.dataset.imageIndex = String(targetIndex)
-  story.querySelectorAll('[data-image-index]').forEach((image) => {
-    image.classList.toggle('is-visible', Number(image.dataset.imageIndex) === targetIndex)
-  })
-  story.querySelectorAll('[data-dot-index]').forEach((dot) => {
-    dot.classList.toggle('is-active', Number(dot.dataset.dotIndex) === targetIndex)
-  })
-}
-
-function pauseAllStories() {
-  elements.feed.querySelectorAll('.js-story-video').forEach((video) => {
-    video.pause()
-  })
-  elements.feed.querySelectorAll('.js-story-audio').forEach((audio) => {
-    audio.pause()
-  })
+function pauseAll() {
+  el.playerFeed.querySelectorAll('.js-story-video').forEach((v) => v.pause())
+  el.playerFeed.querySelectorAll('.js-story-audio').forEach((a) => a.pause())
 }
 
 async function activateStory(story) {
   if (!story) return
-
-  const nextActiveId = Number(story.dataset.postId)
-  if (state.activePostId === nextActiveId) {
-    syncMuteButtons()
-    return
-  }
-
-  state.activePostId = nextActiveId
-  elements.feed.querySelectorAll('.story').forEach((item) => {
-    item.classList.toggle('is-active', item === story)
-  })
-  pauseAllStories()
+  const id = Number(story.dataset.postId)
+  if (state.activePostId === id) return
+  state.activePostId = id
+  pauseAll()
 
   const video = story.querySelector('.js-story-video')
   const audio = story.querySelector('.js-story-audio')
@@ -363,230 +301,134 @@ async function activateStory(story) {
     } catch {
       state.globalMuted = true
       video.muted = true
-      syncMuteButtons()
+      syncMute()
     }
   }
-
-  if (audio) {
-    audio.muted = state.globalMuted
-    if (!state.globalMuted) {
-      try {
-        await audio.play()
-      } catch {
-        state.globalMuted = true
-        audio.muted = true
-        syncMuteButtons()
-      }
+  if (audio && !state.globalMuted) {
+    audio.muted = false
+    try {
+      await audio.play()
+    } catch {
+      state.globalMuted = true
+      audio.muted = true
+      syncMute()
     }
-  }
-
-  const storyIndex = Number.parseInt(story.dataset.index || '0', 10)
-  if (storyIndex >= state.posts.length - 2 && state.hasMore) {
-    loadFeed(false)
   }
 }
 
-function bindStoryInteractions(scope) {
-  scope.querySelectorAll('.story').forEach((story) => {
-    storyObserver?.observe(story)
+function syncMute() {
+  el.playerFeed.querySelectorAll('[data-action="mute"]').forEach((btn) => {
+    btn.innerHTML = state.globalMuted ? icons.muted : icons.volume
+  })
+}
 
-    story.querySelectorAll('[data-gallery-action]').forEach((button) => {
-      button.addEventListener('click', () => {
-        const delta = button.dataset.galleryAction === 'next' ? 1 : -1
-        const currentIndex = Number.parseInt(story.dataset.imageIndex || '0', 10)
-        updateImageStory(story, currentIndex + delta)
+function updateImageStory(story, nextIndex) {
+  const count = Number(story.dataset.imageCount || 0)
+  if (count <= 1) return
+  let idx = nextIndex
+  if (idx < 0) idx = count - 1
+  if (idx >= count) idx = 0
+  story.dataset.imageIndex = idx
+  story.querySelectorAll('[data-image-index]').forEach((img) => {
+    img.classList.toggle('is-visible', Number(img.dataset.imageIndex) === idx)
+  })
+  story.querySelectorAll('[data-dot-index]').forEach((dot) => {
+    dot.classList.toggle('is-active', Number(dot.dataset.dotIndex) === idx)
+  })
+}
+
+function bindStories() {
+  storyObserver?.disconnect()
+  storyObserver = new IntersectionObserver(
+    (entries) => {
+      const visible = entries
+        .filter((e) => e.isIntersecting)
+        .sort((a, b) => b.intersectionRatio - a.intersectionRatio)[0]
+      if (visible) void activateStory(visible.target)
+    },
+    { root: el.playerFeed, threshold: [0.4, 0.7] }
+  )
+
+  el.playerFeed.querySelectorAll('.story').forEach((story) => {
+    storyObserver.observe(story)
+
+    story.querySelectorAll('[data-gallery-action]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const delta = btn.dataset.galleryAction === 'next' ? 1 : -1
+        updateImageStory(story, Number(story.dataset.imageIndex || 0) + delta)
       })
     })
 
     story.querySelector('[data-action="mute"]')?.addEventListener('click', async () => {
       state.globalMuted = !state.globalMuted
-      syncMuteButtons()
-      const activeStory = elements.feed.querySelector(`.story[data-post-id="${state.activePostId}"]`)
-      if (activeStory) {
-        await activateStory(activeStory)
+      syncMute()
+      const active = el.playerFeed.querySelector(`.story[data-post-id="${state.activePostId}"]`)
+      if (active) {
+        state.activePostId = null
+        await activateStory(active)
       }
     })
 
-    story.querySelector('.js-story-video')?.addEventListener('click', async (event) => {
-      const video = event.currentTarget
-      if (video.paused) {
+    story.querySelector('.js-story-video')?.addEventListener('click', async (e) => {
+      const v = e.currentTarget
+      if (v.paused) {
         try {
-          await video.play()
+          await v.play()
         } catch {
           showToast('浏览器阻止了自动播放')
         }
       } else {
-        video.pause()
+        v.pause()
       }
     })
   })
 }
 
-function rebuildObserver() {
-  storyObserver?.disconnect()
-  storyObserver = new IntersectionObserver(
-    (entries) => {
-      const visible = entries
-        .filter((entry) => entry.isIntersecting)
-        .sort((left, right) => right.intersectionRatio - left.intersectionRatio)[0]
-      if (visible) {
-        void activateStory(visible.target)
-      }
-    },
-    {
-      root: elements.feed,
-      threshold: [0.35, 0.6, 0.82]
+function openPlayer(startIndex) {
+  state.activePostId = null
+  const posts = state.posts
+  const total = posts.length
+
+  el.playerFeed.innerHTML = posts.map((p, i) => storyHtml(p, i, total)).join('')
+  bindStories()
+
+  el.playerView.style.display = 'flex'
+  el.browseView.style.display = 'none'
+
+  // Scroll to the selected story
+  requestAnimationFrame(() => {
+    const target = el.playerFeed.querySelectorAll('.story')[startIndex]
+    if (target) {
+      target.scrollIntoView({ behavior: 'instant' })
+      void activateStory(target)
     }
-  )
-}
-
-function appendStories(posts, reset) {
-  if (reset) {
-    if (posts.length === 0) {
-      renderPlaceholder('没有可看的内容', '先在桌面端下载并勾选展示用户，这里就会自动出现视频。')
-      return
-    }
-
-    rebuildObserver()
-    elements.feed.innerHTML = posts.map((post, index) => storyMarkup(post, index)).join('')
-    bindStoryInteractions(elements.feed)
-    requestAnimationFrame(() => {
-      const firstStory = elements.feed.querySelector('.story')
-      if (firstStory) {
-        void activateStory(firstStory)
-      }
-    })
-    return
-  }
-
-  const wrapper = document.createElement('div')
-  const startIndex = state.posts.length - posts.length
-  wrapper.innerHTML = posts
-    .map((post, index) => storyMarkup(post, startIndex + index))
-    .join('')
-
-  bindStoryInteractions(wrapper)
-  while (wrapper.firstElementChild) {
-    elements.feed.appendChild(wrapper.firstElementChild)
-  }
-}
-
-async function loadFeed(reset = false) {
-  if (state.loading) return
-
-  if (reset) {
-    state.page = 1
-    state.posts = []
-    state.hasMore = true
-    state.activePostId = null
-    renderLoadingState()
-  } else if (!state.hasMore) {
-    return
-  }
-
-  state.loading = true
-  setStatus()
-
-  const query = new URLSearchParams({
-    page: String(state.page),
-    pageSize: String(state.pageSize)
   })
-
-  if (state.filters.secUid) query.set('secUid', state.filters.secUid)
-  if (state.filters.keyword.trim()) query.set('keyword', state.filters.keyword.trim())
-  if (state.filters.analyzedOnly) query.set('analyzedOnly', 'true')
-  state.filters.tags.forEach((tag) => query.append('tag', tag))
-
-  try {
-    const payload = await fetchJson(`/api/feed?${query.toString()}`)
-    state.authors = payload.authors || []
-    state.total = payload.total || 0
-    state.hasMore = Boolean(payload.hasMore)
-
-    const incomingPosts = Array.isArray(payload.posts) ? payload.posts : []
-    if (reset) {
-      state.posts = incomingPosts
-    } else {
-      const existingIds = new Set(state.posts.map((post) => post.id))
-      for (const post of incomingPosts) {
-        if (!existingIds.has(post.id)) {
-          state.posts.push(post)
-        }
-      }
-    }
-
-    renderAuthorChips()
-    renderTagChips()
-    appendStories(incomingPosts, reset)
-
-    if (incomingPosts.length > 0) {
-      state.page += 1
-    }
-  } catch (error) {
-    renderPlaceholder('加载失败', error.message || '视频流服务暂时不可用')
-    showToast(error.message || '加载失败')
-  } finally {
-    state.loading = false
-    setStatus()
-  }
 }
+
+function closePlayer() {
+  pauseAll()
+  state.activePostId = null
+  el.playerView.style.display = 'none'
+  el.browseView.style.display = 'flex'
+}
+
+el.playerBack.addEventListener('click', closePlayer)
+
+// ── Bootstrap ──
 
 async function bootstrap() {
-  renderLoadingState()
-
+  el.gridLoading.style.display = 'flex'
   try {
-    const [info, tags] = await Promise.all([fetchJson('/api/info'), fetchJson('/api/tags')])
-    state.info = info
+    const [, tags] = await Promise.all([fetchJson('/api/info'), fetchJson('/api/tags')])
     state.tags = tags.tags || []
-    setStatus()
-    renderTagChips()
-    await loadFeed(true)
-  } catch (error) {
-    renderPlaceholder('网页端未就绪', error.message || '请确认桌面客户端已经完全启动')
+    await loadGrid(true)
+  } catch (err) {
+    el.grid.innerHTML = `
+      <div class="grid-empty">
+        <h2>连接失败</h2>
+        <p>请确认桌面客户端已启动</p>
+      </div>`
   }
 }
-
-elements.filtersToggle.addEventListener('click', () => {
-  elements.filtersPanel.classList.toggle('is-open')
-})
-
-elements.keywordInput.addEventListener('input', (event) => {
-  const input = event.currentTarget
-  window.clearTimeout(searchTimer)
-  searchTimer = window.setTimeout(() => {
-    state.filters.keyword = input.value
-    loadFeed(true)
-  }, 260)
-})
-
-elements.analyzedOnly.addEventListener('change', (event) => {
-  state.filters.analyzedOnly = event.currentTarget.checked
-  loadFeed(true)
-})
-
-elements.resetFilters.addEventListener('click', () => {
-  state.filters = {
-    secUid: '',
-    tags: [],
-    keyword: '',
-    analyzedOnly: false
-  }
-  elements.keywordInput.value = ''
-  elements.analyzedOnly.checked = false
-  loadFeed(true)
-})
-
-elements.feed.addEventListener('scroll', () => {
-  const remaining = elements.feed.scrollHeight - elements.feed.scrollTop - elements.feed.clientHeight
-  if (remaining < window.innerHeight * 1.5 && state.hasMore && !state.loading) {
-    loadFeed(false)
-  }
-})
-
-window.addEventListener('resize', () => {
-  if (window.innerWidth > 720) {
-    elements.filtersPanel.classList.add('is-open')
-  }
-})
 
 bootstrap()

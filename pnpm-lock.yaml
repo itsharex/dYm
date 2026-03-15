@@ -72,8 +72,8 @@ importers:
         specifier: ^1.1.1
         version: 1.1.1(@types/react-dom@19.2.3(@types/react@19.2.13))(@types/react@19.2.13)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
       dy-downloader:
-        specifier: github:Everless321/dyDownload
-        version: https://codeload.github.com/Everless321/dyDownload/tar.gz/2465a4a7373c3caf2676ef0a4a125b6674a713ea
+        specifier: ^0.2.3
+        version: 0.2.3
       electron-updater:
         specifier: ^6.3.9
         version: 6.7.3
@@ -2548,9 +2548,8 @@ packages:
   duplexify@4.1.3:
     resolution: {integrity: sha512-M3BmBhwJRZsSx38lZyhE53Csddgzl5R7xGJNk7CVddZD6CcmwMCH8J+7AprIrQKH7TonKxaCjcv27Qmf+sQ+oA==}
 
-  dy-downloader@https://codeload.github.com/Everless321/dyDownload/tar.gz/2465a4a7373c3caf2676ef0a4a125b6674a713ea:
-    resolution: {tarball: https://codeload.github.com/Everless321/dyDownload/tar.gz/2465a4a7373c3caf2676ef0a4a125b6674a713ea}
-    version: 0.2.2
+  dy-downloader@0.2.3:
+    resolution: {integrity: sha512-wolY77kJZhPb8WnaW4BREudjwcJwcpLMZWiNWMhk/FOEAgxwtj2P5ZtPugvLZnYmUlykktCjlwFMZ/9l7g+4Sw==}
     engines: {node: '>=18.0.0'}
     hasBin: true
 
@@ -6921,7 +6920,7 @@ snapshots:
       readable-stream: 3.6.2
       stream-shift: 1.0.3
 
-  dy-downloader@https://codeload.github.com/Everless321/dyDownload/tar.gz/2465a4a7373c3caf2676ef0a4a125b6674a713ea:
+  dy-downloader@0.2.3:
     dependencies:
       axios: 1.13.5
       commander: 13.1.0
