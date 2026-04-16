@@ -36,7 +36,7 @@ const douyinAPI = {
 
 const userAPI = {
   getAll: (): Promise<DbUser[]> => ipcRenderer.invoke('user:getAll'),
-  add: (url: string): Promise<DbUser> => ipcRenderer.invoke('user:add', url),
+  add: (url: string): Promise<AddUserResult> => ipcRenderer.invoke('user:add', url),
   delete: (id: number, deleteFiles?: boolean): Promise<void> =>
     ipcRenderer.invoke('user:delete', id, deleteFiles),
   refresh: (id: number, url: string): Promise<DbUser> =>
@@ -59,7 +59,13 @@ const userAPI = {
       auto_sync?: boolean
       sync_cron?: string
     }
-  ): Promise<void> => ipcRenderer.invoke('user:batchUpdateSettings', ids, input)
+  ): Promise<void> => ipcRenderer.invoke('user:batchUpdateSettings', ids, input),
+  onAddPostProgress: (callback: (progress: AddPostProgress) => void): (() => void) => {
+    const handler = (_event: Electron.IpcRendererEvent, progress: AddPostProgress): void =>
+      callback(progress)
+    ipcRenderer.on('user:addPostProgress', handler)
+    return () => ipcRenderer.removeListener('user:addPostProgress', handler)
+  }
 }
 
 const taskAPI = {

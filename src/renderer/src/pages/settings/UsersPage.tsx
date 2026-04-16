@@ -236,8 +236,18 @@ export default function UsersPage() {
 
     setLoading(true)
     try {
-      const user = await window.api.user.add(url.trim())
-      toast.success(`用户 ${user.nickname} 添加成功`)
+      const result = await window.api.user.add(url.trim())
+      const { user, isNewUser, postDownload } = result
+      const prefix = isNewUser ? `用户 ${user.nickname} 添加成功` : `用户 ${user.nickname} 已存在`
+      if (postDownload.status === 'downloading') {
+        toast.success(`${prefix}，正在后台下载作品...`)
+      } else if (postDownload.status === 'already-downloaded') {
+        toast.success(`${prefix}，该作品已下载过`)
+      } else if (isNewUser) {
+        toast.success(prefix)
+      } else {
+        toast.info(prefix)
+      }
       setOpen(false)
       setUrl('')
       setClipboardStatus({ detected: false, type: null, url: '' })

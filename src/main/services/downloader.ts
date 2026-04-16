@@ -475,6 +475,89 @@ export function isTaskRunning(taskId: number): boolean {
   return runningTasks.has(taskId)
 }
 
+export type SinglePostResult =
+  | { status: 'success'; folderPath: string }
+  | { status: 'already-downloaded' }
+  | { status: 'failed'; error: string }
+
+interface SinglePostAwemeData {
+  awemeId?: string
+  awemeType?: number
+  nickname?: string
+  caption?: string
+  desc?: string
+  createTime?: string
+  [key: string]: unknown
+}
+
+export async function downloadSinglePost(
+  user: DbUser,
+  awemeData: SinglePostAwemeData
+): Promise<SinglePostResult> {
+  const awemeId = awemeData.awemeId
+  if (!awemeId) {
+    return { status: 'failed', error: '作品数据缺少 aweme_id' }
+  }
+
+  if (getPostByAwemeId(awemeId)) {
+    return { status: 'already-downloaded' }
+  }
+
+  const cookie = getSetting('douyin_cookie') || ''
+  const basePath = getDownloadPath()
+  const userPath = join(basePath, user.sec_uid)
+  const folderName = formatFolderName(awemeId)
+  const folderPath = join(userPath, folderName)
+
+  try {
+    const downloader = new DouyinDownloader({
+      cookie,
+      downloadPath: userPath,
+      naming: '{aweme_id}',
+      folderize: true,
+      cover: true,
+      music: true,
+      desc: true
+    })
+
+    await downloader.createDownloadTasks(awemeData, userPath)
+
+    if (!validateDownloadFolder(folderPath, awemeData.awemeType || 0)) {
+      cleanupFailedDownload(folderPath)
+      await downloader.createDownloadTasks(awemeData, userPath)
+      if (!validateDownloadFolder(folderPath, awemeData.awemeType || 0)) {
+        cleanupFailedDownload(folderPath)
+        return { status: 'failed', error: '下载校验失败' }
+      }
+    }
+
+    if ((awemeData.awemeType || 0) === 68 && getSetting('convert_images_to_jpg') === 'true') {
+      await convertFolderImagesToJpg(folderPath)
+    }
+
+    createPost({
+      aweme_id: awemeId,
+      user_id: user.id,
+      sec_uid: user.sec_uid,
+      nickname: awemeData.nickname || user.nickname,
+      caption: awemeData.caption || '',
+      desc: awemeData.desc || '',
+      aweme_type: awemeData.awemeType || 0,
+      create_time: awemeData.createTime || '',
+      folder_name: folderName,
+      video_path: folderPath,
+      cover_path: folderPath,
+      music_path: folderPath
+    })
+
+    return { status: 'success', folderPath }
+  } catch (error) {
+    console.error(`[Downloader] downloadSinglePost failed for ${awemeId}:`, error)
+    cleanupFailedDownload(folderPath)
+    return { status: 'failed', error: (error as Error).message }
+  }
+}
+
 export async function convertFolderImagesToJpg(folderPath: string): Promise<void> {
   if (!existsSync(folderPath)) return
   try {

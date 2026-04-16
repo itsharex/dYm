@@ -47,9 +47,17 @@ export function AppLayout() {
     const addUser = async () => {
       setIsAdding(true)
       try {
-        const user = await window.api.user.add(pendingLink)
-        toast.success(`已添加用户: ${user.nickname}`)
-        // 导航到用户管理页面
+        const { user, isNewUser, postDownload } = await window.api.user.add(pendingLink)
+        const prefix = isNewUser ? `已添加用户: ${user.nickname}` : `用户 ${user.nickname} 已存在`
+        if (postDownload.status === 'downloading') {
+          toast.success(`${prefix}，正在后台下载作品...`)
+        } else if (postDownload.status === 'already-downloaded') {
+          toast.success(`${prefix}，该作品已下载过`)
+        } else if (isNewUser) {
+          toast.success(prefix)
+        } else {
+          toast.info(prefix)
+        }
         navigate('/users')
       } catch (error) {
         toast.error(`添加失败: ${(error as Error).message}`)
@@ -61,6 +69,19 @@ export function AppLayout() {
 
     addUser()
   }, [pendingLink, isAdding, navigate])
+
+  useEffect(() => {
+    const unsubscribe = window.api.user.onAddPostProgress((progress) => {
+      if (progress.status === 'success') {
+        toast.success(`作品下载完成：${progress.nickname}`)
+      } else if (progress.status === 'already-downloaded') {
+        // 后台二次去重触发（并发场景），静默忽略
+      } else {
+        toast.error(`作品下载失败：${progress.nickname} - ${progress.error || '未知错误'}`)
+      }
+    })
+    return unsubscribe
+  }, [])
 
   const isActive = (path: string) => {
     if (path === '/') return location.pathname === '/'

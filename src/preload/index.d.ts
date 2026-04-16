@@ -85,9 +85,29 @@ declare global {
     details: string[]
   }
 
+  type AddUserPostDownload =
+    | { status: 'downloading'; awemeId: string }
+    | { status: 'already-downloaded'; awemeId: string }
+    | { status: 'disabled' }
+    | { status: 'unavailable' }
+    | { status: 'not-video-link' }
+
+  interface AddUserResult {
+    user: DbUser
+    isNewUser: boolean
+    postDownload: AddUserPostDownload
+  }
+
+  interface AddPostProgress {
+    awemeId: string
+    nickname: string
+    status: 'success' | 'failed' | 'already-downloaded'
+    error?: string
+  }
+
   interface UserAPI {
     getAll: () => Promise<DbUser[]>
-    add: (url: string) => Promise<DbUser>
+    add: (url: string) => Promise<AddUserResult>
     delete: (id: number, deleteFiles?: boolean) => Promise<void>
     refresh: (id: number, url: string) => Promise<DbUser>
     batchRefresh: (
@@ -99,6 +119,7 @@ declare global {
       ids: number[],
       input: Omit<UpdateUserSettingsInput, 'remark'>
     ) => Promise<void>
+    onAddPostProgress: (callback: (progress: AddPostProgress) => void) => () => void
   }
 
   interface DbTask {

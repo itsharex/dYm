@@ -27,6 +27,7 @@ export default function SystemPage() {
   const [maxDownloadCount, setMaxDownloadCount] = useState('0')
   const [videoDownloadConcurrency, setVideoDownloadConcurrency] = useState('3')
   const [convertToJpg, setConvertToJpg] = useState(false)
+  const [downloadPostOnAddUser, setDownloadPostOnAddUser] = useState(true)
   const originalDownloadPath = useRef('')
 
   // 迁移
@@ -84,6 +85,7 @@ export default function SystemPage() {
     setMaxDownloadCount(settings.max_download_count || '0')
     setVideoDownloadConcurrency(settings.video_download_concurrency || '3')
     setConvertToJpg(settings.convert_images_to_jpg === 'true')
+    setDownloadPostOnAddUser(settings.download_post_on_add_user !== 'false')
     setAnalysisConcurrency(settings.analysis_concurrency || '2')
     setAnalysisRpm(settings.analysis_rpm || '10')
     setAnalysisModel(settings.analysis_model || 'grok-4-fast')
@@ -174,6 +176,10 @@ export default function SystemPage() {
     await window.api.settings.set('max_download_count', maxDownloadCount)
     await window.api.settings.set('video_download_concurrency', videoDownloadConcurrency)
     await window.api.settings.set('convert_images_to_jpg', convertToJpg ? 'true' : 'false')
+    await window.api.settings.set(
+      'download_post_on_add_user',
+      downloadPostOnAddUser ? 'true' : 'false'
+    )
     originalDownloadPath.current = downloadPath
     toast.success('下载设置已保存')
   }
@@ -460,6 +466,28 @@ export default function SystemPage() {
                       <span
                         className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform ${
                           convertToJpg ? 'translate-x-[22px]' : 'translate-x-0.5'
+                        }`}
+                      />
+                    </button>
+                  </div>
+                  {/* Download post on add-user via video link */}
+                  <div className="flex flex-col gap-3 py-4 md:flex-row md:items-center md:justify-between">
+                    <div>
+                      <p className="text-sm text-[#1D1D1F]">添加用户时下载作品</p>
+                      <p className="text-xs text-[#A1A1A6] mt-1">
+                        输入作品链接添加用户时，后台下载该作品；用户已存在则补下载
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setDownloadPostOnAddUser(!downloadPostOnAddUser)}
+                      className={`relative inline-flex h-6 w-11 flex-shrink-0 items-center rounded-full transition-colors ${
+                        downloadPostOnAddUser ? 'bg-[#0A84FF]' : 'bg-[#D1D1D6]'
+                      }`}
+                    >
+                      <span
+                        className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform ${
+                          downloadPostOnAddUser ? 'translate-x-[22px]' : 'translate-x-0.5'
                         }`}
                       />
                     </button>

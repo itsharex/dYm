@@ -57,11 +57,13 @@ import {
   deletePost,
   getPostsByUserId,
   deletePostsByUserId,
+  getPostByAwemeId,
   getDashboardOverview,
   getDownloadTrend,
   getUserVideoDistribution,
   getTopTags,
-  getContentLevelDistribution
+  getContentLevelDistribution,
+  type DbUser
 } from './database'
 import { fetchDouyinCookie, refreshDouyinCookieSilent, isCookieRefreshing } from './services/cookie'
 import {
@@ -77,7 +79,8 @@ import {
   startDownloadTask,
   stopDownloadTask,
   isTaskRunning,
-  convertFolderImagesToJpg
+  convertFolderImagesToJpg,
+  downloadSinglePost
 } from './services/downloader'
 import { startAnalysis, stopAnalysis, isAnalysisRunning } from './services/analyzer'
 import { blockCustomProtocols } from './utils/block-protocols'
@@ -115,6 +118,26 @@ import {
   startWebBrowserServer,
   stopWebBrowserServer
 } from './services/web-browser'
+
+type AddUserPostDownload =
+  | { status: 'downloading'; awemeId: string }
+  | { status: 'already-downloaded'; awemeId: string }
+  | { status: 'disabled' }
+  | { status: 'unavailable' }
+  | { status: 'not-video-link' }
+
+interface AddPostProgressPayload {
+  awemeId: string
+  nickname: string
+  status: 'success' | 'failed' | 'already-downloaded'
+  error?: string
+}
+
+function broadcastAddPostProgress(payload: AddPostProgressPayload): void {
+  for (const win of BrowserWindow.getAllWindows()) {
+    win.webContents.send('user:addPostProgress', payload)
+  }
+}
 
 // 全局变量
 let mainWindow: BrowserWindow | null = null
@@ -457,20 +480,19 @@ app.whenReady().then(async () => {
   ipcMain.handle('user:add', async (_event, url: string) => {
     console.log('[User:add] Input url:', url)
 
-    // 智能识别链接类型
     const parseResult = await parseDouyinUrl(url)
     console.log('[User:add] Link type:', parseResult.type, 'id:', parseResult.id)
 
     let userData: Record<string, unknown>
     let homepageUrl = url
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let awemeDataForDownload: any = null
 
     if (parseResult.type === 'user') {
-      // 用户链接：直接获取用户资料
       const profileRes = await fetchUserProfileBySecUid(parseResult.id)
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       userData = (profileRes as any)._data?.user
     } else if (parseResult.type === 'video') {
-      // 作品链接：先获取作品详情，再提取作者信息
       try {
         const postDetail = await fetchVideoDetail(url)
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -487,7 +509,14 @@ app.whenReady().then(async () => {
           throw new Error('作品信息中未找到作者数据')
         }
 
-        // 通过 secUserId 获取完整用户资料
+        if (typeof detail.toAwemeData === 'function') {
+          try {
+            awemeDataForDownload = detail.toAwemeData()
+          } catch (e) {
+            console.error('[User:add] toAwemeData failed:', e)
+          }
+        }
+
         const profileRes = await fetchUserProfileBySecUid(secUid)
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         userData = (profileRes as any)._data?.user
@@ -513,36 +542,82 @@ app.whenReady().then(async () => {
       nickname: userData.nickname
     })
 
-    // 检查是否已存在
-    const existing = getUserBySecUid(userData.sec_uid as string)
+    const secUidStr = userData.sec_uid as string
+    const existing = getUserBySecUid(secUidStr)
+
+    let dbUser: DbUser
+    let isNewUser = false
     if (existing) {
-      throw new Error('用户已存在')
+      dbUser = existing
+    } else {
+      const input = {
+        sec_uid: secUidStr,
+        uid: (userData.uid as string) || '',
+        nickname: (userData.nickname as string) || '',
+        signature: (userData.signature as string) || '',
+        avatar:
+          (userData.avatar_larger as { url_list?: string[] })?.url_list?.[0] ||
+          (userData.avatar_medium as { url_list?: string[] })?.url_list?.[0] ||
+          '',
+        short_id: (userData.short_id as string) || '',
+        unique_id: (userData.unique_id as string) || '',
+        following_count: (userData.following_count as number) || 0,
+        follower_count: (userData.follower_count as number) || 0,
+        total_favorited: (userData.total_favorited as number) || 0,
+        aweme_count: (userData.aweme_count as number) || 0,
+        homepage_url: homepageUrl
+      }
+      console.log('[User:add] Creating user with:', JSON.stringify(input, null, 2))
+      dbUser = createUser(input)
+      isNewUser = true
+      console.log('[User:add] User created:', dbUser.id)
     }
 
-    // 创建用户
-    const input = {
-      sec_uid: userData.sec_uid as string,
-      uid: (userData.uid as string) || '',
-      nickname: (userData.nickname as string) || '',
-      signature: (userData.signature as string) || '',
-      avatar:
-        (userData.avatar_larger as { url_list?: string[] })?.url_list?.[0] ||
-        (userData.avatar_medium as { url_list?: string[] })?.url_list?.[0] ||
-        '',
-      short_id: (userData.short_id as string) || '',
-      unique_id: (userData.unique_id as string) || '',
-      following_count: (userData.following_count as number) || 0,
-      follower_count: (userData.follower_count as number) || 0,
-      total_favorited: (userData.total_favorited as number) || 0,
-      aweme_count: (userData.aweme_count as number) || 0,
-      homepage_url: homepageUrl
+    // 决定是否触发作品下载
+    let postDownload: AddUserPostDownload = { status: 'not-video-link' }
+
+    if (parseResult.type === 'video') {
+      const enabled = getSetting('download_post_on_add_user') !== 'false'
+      if (!enabled) {
+        postDownload = { status: 'disabled' }
+      } else if (!awemeDataForDownload || !awemeDataForDownload.awemeId) {
+        postDownload = { status: 'unavailable' }
+      } else if (getPostByAwemeId(awemeDataForDownload.awemeId)) {
+        postDownload = {
+          status: 'already-downloaded',
+          awemeId: awemeDataForDownload.awemeId
+        }
+      } else {
+        postDownload = {
+          status: 'downloading',
+          awemeId: awemeDataForDownload.awemeId
+        }
+
+        // 后台下载，不阻塞 IPC 返回
+        const awemeData = awemeDataForDownload
+        const targetUser = dbUser
+        void (async () => {
+          const result = await downloadSinglePost(targetUser, awemeData)
+          const basePayload = {
+            awemeId: awemeData.awemeId as string,
+            nickname: targetUser.nickname
+          }
+          if (result.status === 'success') {
+            broadcastAddPostProgress({ ...basePayload, status: 'success' })
+          } else if (result.status === 'already-downloaded') {
+            broadcastAddPostProgress({ ...basePayload, status: 'already-downloaded' })
+          } else {
+            broadcastAddPostProgress({
+              ...basePayload,
+              status: 'failed',
+              error: result.error
+            })
+          }
+        })()
+      }
     }
-    console.log('[User:add] Creating user with:', JSON.stringify(input, null, 2))
 
-    const dbUser = createUser(input)
-    console.log('[User:add] User created:', dbUser.id)
-
-    return dbUser
+    return { user: dbUser, isNewUser, postDownload }
   })
   ipcMain.handle('user:delete', (_event, id: number, deleteFiles?: boolean) => {
     const result = deleteUser(id)
