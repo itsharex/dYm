@@ -352,16 +352,21 @@ function createWindow(): BrowserWindow {
   return mainWindow
 }
 
-// 注册自定义协议用于加载本地文件
 protocol.registerSchemesAsPrivileged([
-  { scheme: 'local', privileges: { bypassCSP: true, stream: true, supportFetchAPI: true } }
+  { scheme: 'local', privileges: { bypassCSP: true, stream: true, supportFetchAPI: true } },
+  { scheme: 'bytedance', privileges: {} },
+  { scheme: 'snssdk', privileges: {} },
+  { scheme: 'aweme', privileges: {} }
 ])
 
 // This method will be called when Electron has finished
 // initialization and is ready to create browser windows.
 // Some APIs can only be used after this event occurs.
 app.whenReady().then(async () => {
-  // 注册 local:// 协议处理器（支持 Range 请求以允许视频进度条拖动）
+  for (const scheme of ['bytedance', 'snssdk', 'aweme']) {
+    protocol.handle(scheme, () => new Response('', { status: 400 }))
+  }
+
   protocol.handle('local', async (request) => {
     const filePath = fromUrlPath(decodeURIComponent(request.url.replace('local://', '')))
     console.log('[local://] Request URL:', request.url)
