@@ -300,7 +300,18 @@ function createWindow(): BrowserWindow {
     }
   })
 
+  mainWindow.webContents.on('will-navigate', (event, url) => {
+    const BLOCKED = ['bytedance:', 'snssdk:', 'aweme:']
+    if (BLOCKED.some((p) => url.startsWith(p))) {
+      event.preventDefault()
+    }
+  })
+
   mainWindow.webContents.setWindowOpenHandler((details) => {
+    const BLOCKED = ['bytedance:', 'snssdk:', 'aweme:']
+    if (BLOCKED.some((p) => details.url.startsWith(p))) {
+      return { action: 'deny' }
+    }
     shell.openExternal(details.url)
     return { action: 'deny' }
   })
